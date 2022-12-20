@@ -1,15 +1,10 @@
 import { ResponseType } from "axios";
 
 import { S5Client } from "./client";
-import { convertSkylinkToBase32, formatSkylink } from "./skylink/format";
+//import { convertSkylinkToBase32, formatSkylink } from "./skylink/format";
 import { parseSkylink } from "./skylink/parse";
 import { BaseCustomOptions, DEFAULT_BASE_OPTIONS } from "./utils/options";
 import { addUrlSubdomain, addUrlQuery, makeUrl } from "./utils/url";
-import {
-//  validateOptionalObject,
-  validateString,
-} from "./utils/validation";
-
 
 /**
  * Custom download options.
@@ -43,8 +38,6 @@ export type CustomGetMetadataOptions = BaseCustomOptions & {
  */
 export type GetMetadataResponse = {
   metadata: Record<string, unknown>;
-  portalUrl: string;
-  skylink: string;
 };
 
 export const DEFAULT_DOWNLOAD_OPTIONS = {
@@ -66,22 +59,20 @@ const DEFAULT_GET_METADATA_OPTIONS = {
  * Initiates a download of the content of the skylink within the browser.
  *
  * @param this - S5Client
- * @param skylinkUrl - 46-character skylink, or a valid skylink URL. Can be followed by a path. Note that the skylink will not be encoded, so if your path might contain special characters, consider using `customOptions.path`.
+ * @param cid - 46-character skylink, or a valid skylink URL. Can be followed by a path. Note that the skylink will not be encoded, so if your path might contain special characters, consider using `customOptions.path`.
  * @param [customOptions] - Additional settings that can optionally be set.
  * @param [customOptions.endpointDownload="/"] - The relative URL path of the portal endpoint to contact.
  * @returns - The full URL that was used.
- * @throws - Will throw if the skylinkUrl does not contain a skylink or if the path option is not a string.
+ * @throws - Will throw if the cid does not contain a skylink or if the path option is not a string.
  */
 export async function downloadFile(
   this: S5Client,
-  skylinkUrl: string,
+  cid: string,
   customOptions?: CustomDownloadOptions
 ): Promise<string> {
-  // Validation is done in `getSkylinkUrl`.
-
   const opts = { ...DEFAULT_DOWNLOAD_OPTIONS, ...this.customOptions, ...customOptions, download: true };
 
-  const url = await this.getSkylinkUrl(skylinkUrl, opts);
+  const url = await this.getSkylinkUrl(cid, opts);
 
   // Download the url.
   window.location.assign(url);
@@ -93,45 +84,35 @@ export async function downloadFile(
  * Constructs the full URL for the given skylink.
  *
  * @param this - S5Client
- * @param skylinkUrl - Base64 skylink, or a valid URL that contains a skylink. See `downloadFile`.
+ * @param cid - Base64 skylink, or a valid URL that contains a skylink. See `downloadFile`.
  * @param [customOptions] - Additional settings that can optionally be set.
  * @param [customOptions.endpointDownload="/"] - The relative URL path of the portal endpoint to contact.
  * @returns - The full URL for the skylink.
- * @throws - Will throw if the skylinkUrl does not contain a skylink or if the path option is not a string.
+ * @throws - Will throw if the cid does not contain a skylink or if the path option is not a string.
  */
 export async function getSkylinkUrl(
   this: S5Client,
-  skylinkUrl: string,
+  cid: string,
   customOptions?: CustomDownloadOptions
 ): Promise<string> {
-  // Validation is done in `getSkylinkUrlForPortal`.
-
   const opts = { ...DEFAULT_DOWNLOAD_OPTIONS, ...this.customOptions, ...customOptions };
 
   const portalUrl = await this.portalUrl();
 
-  return getSkylinkUrlForPortal(portalUrl, skylinkUrl, opts);
+  return getSkylinkUrlForPortal(portalUrl, cid, opts);
 }
 
 /**
  * Gets the skylink URL without an initialized client.
  *
  * @param portalUrl - The portal URL.
- * @param skylinkUrl - Base64 skylink, or a valid URL that contains a skylink. See `downloadFile`.
+ * @param cid - Base64 skylink, or a valid URL that contains a skylink. See `downloadFile`.
  * @param [customOptions] - Additional settings that can optionally be set.
  * @param [customOptions.endpointDownload="/"] - The relative URL path of the portal endpoint.
  * @returns - The full URL for the skylink.
- * @throws - Will throw if the skylinkUrl does not contain a skylink or if the path option is not a string.
+ * @throws - Will throw if the cid does not contain a skylink or if the path option is not a string.
  */
-export function getSkylinkUrlForPortal(
-  portalUrl: string,
-  skylinkUrl: string,
-  customOptions?: CustomDownloadOptions
-): string {
-  validateString("portalUrl", portalUrl, "parameter");
-  validateString("skylinkUrl", skylinkUrl, "parameter");
-//  validateOptionalObject("customOptions", customOptions, "parameter", DEFAULT_DOWNLOAD_OPTIONS);
-
+export function getSkylinkUrlForPortal(portalUrl: string, cid: string, customOptions?: CustomDownloadOptions): string {
   const opts = { ...DEFAULT_DOWNLOAD_OPTIONS, ...customOptions };
 
   const query = buildQuery(opts.download);
@@ -159,21 +140,21 @@ export function getSkylinkUrlForPortal(
     // The caller wants to use a URL with the skylink as a base32 subdomain.
     //
     // Get the path from the skylink. Use the empty string if not found.
-    const skylinkPath = parseSkylink(skylinkUrl, { onlyPath: true }) ?? "";
+    const skylinkPath = parseSkylink(cid, { onlyPath: true }) ?? "";
     // Get just the skylink.
-    let skylink = parseSkylink(skylinkUrl);
+    const skylink = parseSkylink(cid);
     if (skylink === null) {
-      throw new Error(`Could not get skylink out of input '${skylinkUrl}'`);
+      throw new Error(`Could not get skylink out of input '${cid}'`);
     }
     // Convert the skylink (without the path) to base32.
-    skylink = convertSkylinkToBase32(skylink);
+    //skylink = convertSkylinkToBase32(skylink);
     url = addUrlSubdomain(portalUrl, skylink);
     url = makeUrl(url, skylinkPath, path);
   } else {
     // Get the skylink including the path.
-    const skylink = parseSkylink(skylinkUrl, { includePath: true });
+    const skylink = parseSkylink(cid, { includePath: true });
     if (skylink === null) {
-      throw new Error(`Could not get skylink with path out of input '${skylinkUrl}'`);
+      throw new Error(`Could not get skylink with path out of input '${cid}'`);
     }
     // Add additional path if passed in.
     url = makeUrl(portalUrl, opts.endpointDownload, skylink);
@@ -187,46 +168,26 @@ export function getSkylinkUrlForPortal(
  * Gets only the metadata for the given skylink without the contents.
  *
  * @param this - S5Client
- * @param skylinkUrl - Base64 skylink, or a valid URL that contains a skylink. See `downloadFile`.
+ * @param cid - Base64 cid.
  * @param [customOptions] - Additional settings that can optionally be set. See `downloadFile` for the full list.
  * @param [customOptions.endpointGetMetadata="/"] - The relative URL path of the portal endpoint to contact.
  * @returns - The metadata in JSON format. Empty if no metadata was found.
- * @throws - Will throw if the skylinkUrl does not contain a skylink or if the path option is not a string.
+ * @throws - Will throw if the cid does not contain a cid .
  */
 export async function getMetadata(
   this: S5Client,
-  skylinkUrl: string,
+  cid: string,
   customOptions?: CustomGetMetadataOptions
 ): Promise<GetMetadataResponse> {
-//  validateOptionalObject("customOptions", customOptions, "parameter", DEFAULT_GET_METADATA_OPTIONS);
-  // Rest of validation is done in `getSkylinkUrl`.
-
   const opts = { ...DEFAULT_GET_METADATA_OPTIONS, ...this.customOptions, ...customOptions };
-
-  // Don't include the path for now since the endpoint doesn't support it.
-  const path = parseSkylink(skylinkUrl, { onlyPath: true });
-  if (path) {
-    throw new Error("Skylink string should not contain a path");
-  }
-  const getSkylinkUrlOpts = { endpointDownload: opts.endpointGetMetadata };
-  const url = await this.getSkylinkUrl(skylinkUrl, getSkylinkUrlOpts);
 
   const response = await this.executeRequest({
     ...opts,
-    method: "GET",
-    url,
+    method: "get",
+    extraPath: cid,
   });
 
-  // TODO: Pass subdomain option.
-//  const inputSkylink = parseSkylink(skylinkUrl);
-//  validateGetMetadataResponse(response, inputSkylink as string);
-
-  const metadata = response.data;
-
-  const portalUrl = response.headers["s5-portal-api"];
-  const skylink = formatSkylink(response.headers["s5-skylink"]);
-
-  return { metadata, portalUrl, skylink };
+  return response.data;
 }
 
 // =======
@@ -247,11 +208,3 @@ function buildQuery(download: boolean): { [key: string]: string | undefined } {
   }
   return query;
 }
-
-
-
-
-
-
-
-

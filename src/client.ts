@@ -10,11 +10,7 @@ import {
   uploadSmallFileRequest,
   uploadLargeFileRequest,
 } from "./upload";
-import {
-  downloadFile,
-  getSkylinkUrl,
-  getMetadata,
-} from "./download";
+import { downloadFile, getSkylinkUrl, getMetadata } from "./download";
 
 import { defaultPortalUrl, ensureUrl } from "./utils/url";
 
@@ -51,7 +47,7 @@ export type CustomClientOptions = {
  * @property [headers] - Any request headers to set.
  * @property [subdomain] - An optional subdomain to add to the URL.
  * @property [query] - Query parameters.
- * @property [extraPath] - An additional path to append to the URL, e.g. a 46-character skylink.
+ * @property [extraPath] - An additional path to append to the URL, e.g. a 46-character cid.
  * @property [responseType] - The response type.
  * @property [transformRequest] - A function that allows manually transforming the request.
  * @property [transformResponse] - A function that allows manually transforming the response.
@@ -202,12 +198,7 @@ export class S5Client {
     });
 
     // Build headers.
-    const headers = buildRequestHeaders(
-      config.headers,
-      config.customUserAgent,
-      config.customCookie,
-      config.s5ApiKey
-    );
+    const headers = buildRequestHeaders(config.headers, config.customUserAgent, config.customCookie, config.s5ApiKey);
 
     const auth = config.APIKey ? { username: "", password: config.APIKey } : undefined;
 
