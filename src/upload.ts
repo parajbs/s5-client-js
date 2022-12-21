@@ -2,15 +2,14 @@ import { AxiosResponse } from "axios";
 import { DetailedError, HttpRequest, Upload } from "tus-js-client";
 
 import * as blake3 from "blake3-wasm";
+import { Buffer } from "buffer";
 
 import { getFileMimeType } from "./utils/file";
 import { BaseCustomOptions, DEFAULT_BASE_OPTIONS } from "./utils/options";
 import { S5Client } from "./client";
 import { JsonData } from "./utils/types";
 import { buildRequestHeaders, buildRequestUrl } from "./request";
-
-export const mhashBlake3Default = 0x1f;
-export const cidTypeRaw = 0x26;
+import { mhashBlake3Default, cidTypeRaw } from "./constants";
 
 /**
  * The tus chunk size is (4MiB - encryptionOverhead) * dataPieces, set as default.
@@ -32,6 +31,7 @@ const PORTAL_FILE_FIELD_NAME = "file";
  * Custom upload options.
  *
  * @property [endpointUpload] - The relative URL path of the portal endpoint to contact.
+ * @property [endpointDirectoryUpload] - The relative URL path of the portal endpoint to contact for Directorys.
  * @property [endpointLargeUpload] - The relative URL path of the portal endpoint to contact for large uploads.
  * @property [customFilename] - The custom filename to use when uploading files.
  * @property [largeFileSize=32943040] - The size at which files are considered "large" and will be uploaded using the tus resumable upload protocol. This is the size of one chunk by default (32 mib). Note that this does not affect the actual size of chunks used by the protocol.
@@ -62,6 +62,15 @@ export type UploadRequestResponse = {
   cid: string;
 };
 
+/**
+ * The response to an upload request.
+ *
+ * @property cid - 46-character cid.
+ */
+export type UploadTusRequestResponse = {
+  data: { cid: string };
+};
+
 export const DEFAULT_UPLOAD_OPTIONS = {
   ...DEFAULT_BASE_OPTIONS,
 
@@ -70,8 +79,8 @@ export const DEFAULT_UPLOAD_OPTIONS = {
   endpointLargeUpload: "/s5/upload/tus",
 
   customFilename: "",
-  errorPages: undefined,
-  tryFiles: undefined,
+  errorPages: { 404: "/404.html" },
+  tryFiles: ["index.html"],
 
   // Large files.
   largeFileSize: TUS_CHUNK_SIZE,
@@ -121,7 +130,7 @@ export async function uploadSmallFile(
 ): Promise<UploadRequestResponse> {
   const response = await this.uploadSmallFileRequest(file, customOptions);
 
-  const responsedS5Cid = response.data.cid;
+  const responsedS5Cid = { cid: response.data.cid };
   return responsedS5Cid;
 }
 
@@ -177,7 +186,7 @@ export async function uploadLargeFile(
 ): Promise<UploadRequestResponse> {
   const response = await this.uploadLargeFileRequest(file, customOptions);
 
-  const responsedS5Cid = response.data.cid;
+  const responsedS5Cid = response.data;
   return responsedS5Cid;
 }
 
@@ -195,7 +204,7 @@ export async function uploadLargeFileRequest(
   this: S5Client,
   file: File,
   customOptions?: CustomUploadOptions
-): Promise<AxiosResponse> {
+): Promise<UploadTusRequestResponse> {
   const opts = { ...DEFAULT_UPLOAD_OPTIONS, ...this.customOptions, ...customOptions };
 
   // Validation.
@@ -216,7 +225,6 @@ export async function uploadLargeFileRequest(
       // @ts-expect-error TS complains.
       opts.onUploadProgress(progress, { loaded: bytesSent, total: bytesTotal });
     };
-  //  const chunkSize = TUS_CHUNK_SIZE;
 
   await blake3.load();
 
@@ -232,10 +240,6 @@ export async function uploadLargeFileRequest(
   const b3hash = hasher.digest();
   const hash = Buffer.concat([Buffer.alloc(1, mhashBlake3Default), Buffer.from(b3hash)]);
   const cid = Buffer.concat([Buffer.alloc(1, cidTypeRaw), hash, numberToBuffer(file.size)]);
-
-  console.log("b3hash :  " + b3hash);
-  console.log("hash :  " + hash);
-  console.log("cid :  " + cid);
 
   /**
    * convert a number to Buffer.
@@ -260,10 +264,9 @@ export async function uploadLargeFileRequest(
   return new Promise((resolve, reject) => {
     const tusOpts = {
       endpoint: url,
-      // chunkSize,
       //      retryDelays: opts.retryDelays,
       metadata: {
-        hash: hash.toString("base64").replace(/-/g, "+").replace(/_/g, "/").replace("=", ""),
+        hash: hash.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace("=", ""),
         filename,
         filetype: file.type,
       },
@@ -284,8 +287,10 @@ export async function uploadLargeFileRequest(
           reject(new Error("'upload.url' was not set"));
           return;
         }
-        console.log("Upload finished.");
-        console.log("CID:", "u" + cid.toString("base64").replace(/-/g, "+").replace(/_/g, "/").replace("=", ""));
+
+        const resCid = "u" + cid.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace("=", "");
+        const resolveData = { data: { cid: resCid } };
+        resolve(resolveData);
       },
     };
 
@@ -313,7 +318,7 @@ export async function uploadDirectory(
 ): Promise<UploadRequestResponse> {
   const response = await this.uploadDirectoryRequest(directory, filename, customOptions);
 
-  const responsedS5Cid = response.data.cid;
+  const responsedS5Cid = { cid: response.data.cid };
   return responsedS5Cid;
 }
 

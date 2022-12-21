@@ -10,7 +10,7 @@ import {
   uploadSmallFileRequest,
   uploadLargeFileRequest,
 } from "./upload";
-import { downloadFile, getSkylinkUrl, getMetadata } from "./download";
+import { downloadFile, getCidUrl, getMetadata } from "./download";
 
 import { defaultPortalUrl, ensureUrl } from "./utils/url";
 
@@ -113,7 +113,7 @@ export class S5Client {
   // Download
 
   downloadFile = downloadFile;
-  getSkylinkUrl = getSkylinkUrl;
+  getCidUrl = getCidUrl;
   getMetadata = getMetadata;
 
   /**

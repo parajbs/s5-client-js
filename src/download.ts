@@ -1,16 +1,14 @@
 import { ResponseType } from "axios";
 
 import { S5Client } from "./client";
-//import { convertSkylinkToBase32, formatSkylink } from "./skylink/format";
-import { parseSkylink } from "./skylink/parse";
 import { BaseCustomOptions, DEFAULT_BASE_OPTIONS } from "./utils/options";
-import { addUrlSubdomain, addUrlQuery, makeUrl } from "./utils/url";
+// import { addUrlSubdomain, addUrlQuery, makeUrl } from "./utils/url";
 
 /**
  * Custom download options.
  *
  * @property [endpointDownload] - The relative URL path of the portal endpoint to contact.
- * @property [download=false] - Indicates to `getSkylinkUrl` whether the file should be downloaded (true) or opened in the browser (false). `downloadFile` and `openFile` override this value.
+ * @property [download=false] - Indicates to `getCidUrl` whether the file should be downloaded (true) or opened in the browser (false). `downloadFile` and `openFile` override this value.
  * @property [path] - A path to append to the skylink, e.g. `dir1/dir2/file`. A Unix-style path is expected. Each path component will be URL-encoded.
  * @property [range] - The Range request header to set for the download. Not applicable for in-borwser downloads.
  * @property [responseType] - The response type.
@@ -72,7 +70,7 @@ export async function downloadFile(
 ): Promise<string> {
   const opts = { ...DEFAULT_DOWNLOAD_OPTIONS, ...this.customOptions, ...customOptions, download: true };
 
-  const url = await this.getSkylinkUrl(cid, opts);
+  const url = await this.getCidUrl(cid, opts);
 
   // Download the url.
   window.location.assign(url);
@@ -90,16 +88,14 @@ export async function downloadFile(
  * @returns - The full URL for the skylink.
  * @throws - Will throw if the cid does not contain a skylink or if the path option is not a string.
  */
-export async function getSkylinkUrl(
-  this: S5Client,
-  cid: string,
-  customOptions?: CustomDownloadOptions
-): Promise<string> {
+export async function getCidUrl(this: S5Client, cid: string, customOptions?: CustomDownloadOptions): Promise<string> {
   const opts = { ...DEFAULT_DOWNLOAD_OPTIONS, ...this.customOptions, ...customOptions };
+  console.log(opts);
 
   const portalUrl = await this.portalUrl();
 
-  return getSkylinkUrlForPortal(portalUrl, cid, opts);
+  const resolveUrl = portalUrl + "/" + cid;
+  return resolveUrl;
 }
 
 /**
@@ -112,56 +108,57 @@ export async function getSkylinkUrl(
  * @returns - The full URL for the skylink.
  * @throws - Will throw if the cid does not contain a skylink or if the path option is not a string.
  */
-export function getSkylinkUrlForPortal(portalUrl: string, cid: string, customOptions?: CustomDownloadOptions): string {
+export function getCidUrlForPortal(portalUrl: string, cid: string, customOptions?: CustomDownloadOptions): string {
   const opts = { ...DEFAULT_DOWNLOAD_OPTIONS, ...customOptions };
+  console.log(opts);
 
-  const query = buildQuery(opts.download);
+  //const query =
+  buildQuery(opts.download);
 
   // URL-encode the path.
-  let path = "";
-  if (opts.path) {
-    if (typeof opts.path !== "string") {
-      throw new Error(`opts.path has to be a string, ${typeof opts.path} provided`);
-    }
+  //let path = "";
+  //if (opts.path) {
+  //  if (typeof opts.path !== "string") {
+  //    throw new Error(`opts.path has to be a string, ${typeof opts.path} provided`);
+  //  }
+  // Encode each element of the path separately and join them.
+  //
+  // Don't use encodeURI because it does not encode characters such as '?'
+  // etc. These are allowed as filenames on S5 and should be encoded so
+  // they are not treated as URL separators.
+  //    path = opts.path
+  //      .split("/")
+  //      .map((element: string) => encodeURIComponent(element))
+  //      .join("/");
+  //}
 
-    // Encode each element of the path separately and join them.
-    //
-    // Don't use encodeURI because it does not encode characters such as '?'
-    // etc. These are allowed as filenames on S5 and should be encoded so
-    // they are not treated as URL separators.
-    path = opts.path
-      .split("/")
-      .map((element: string) => encodeURIComponent(element))
-      .join("/");
-  }
+  //let url;
+  //if (opts.subdomain) {
+  // The caller wants to use a URL with the skylink as a base32 subdomain.
+  //
+  // Get the path from the skylink. Use the empty string if not found.
+  //const skylinkPath = parseSkylink(cid, { onlyPath: true }) ?? "";
+  // Get just the skylink.
+  //const skylink = parseSkylink(cid);
+  //if (skylink === null) {
+  //  throw new Error(`Could not get skylink out of input '${cid}'`);
+  //}
+  // Convert the skylink (without the path) to base32.
+  //skylink = convertSkylinkToBase32(skylink);
+  //url = addUrlSubdomain(portalUrl, skylink);
+  //url = makeUrl(url, skylinkPath, path);
+  //} else {
+  // Get the skylink including the path.
+  //const skylink = parseSkylink(cid, { includePath: true });
+  //if (skylink === null) {
+  //  throw new Error(`Could not get skylink with path out of input '${cid}'`);
+  //}
+  // Add additional path if passed in.
+  //url = makeUrl(portalUrl, opts.endpointDownload, skylink);
+  //url = makeUrl(url, path);
+  //}
 
-  let url;
-  if (opts.subdomain) {
-    // The caller wants to use a URL with the skylink as a base32 subdomain.
-    //
-    // Get the path from the skylink. Use the empty string if not found.
-    const skylinkPath = parseSkylink(cid, { onlyPath: true }) ?? "";
-    // Get just the skylink.
-    const skylink = parseSkylink(cid);
-    if (skylink === null) {
-      throw new Error(`Could not get skylink out of input '${cid}'`);
-    }
-    // Convert the skylink (without the path) to base32.
-    //skylink = convertSkylinkToBase32(skylink);
-    url = addUrlSubdomain(portalUrl, skylink);
-    url = makeUrl(url, skylinkPath, path);
-  } else {
-    // Get the skylink including the path.
-    const skylink = parseSkylink(cid, { includePath: true });
-    if (skylink === null) {
-      throw new Error(`Could not get skylink with path out of input '${cid}'`);
-    }
-    // Add additional path if passed in.
-    url = makeUrl(portalUrl, opts.endpointDownload, skylink);
-    url = makeUrl(url, path);
-  }
-
-  return addUrlQuery(url, query);
+  return "addUrlQuery(url, query)";
 }
 
 /**
